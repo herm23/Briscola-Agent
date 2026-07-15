@@ -4,3 +4,6 @@
 # Python
 __pycache__/
 *.pyc
+
+# Training output (i pesi finali per la consegna si copiano a parte)
+models_savings/

@@ -280,7 +280,7 @@ class BriscolaGame:
         Note that this is a reward in RL terms, not actual game points.
         """
         winner_player_id, points = self.evaluate_step()
-        print(winner_player_id, " - ", end="")
+        # print(winner_player_id, " - ", end="")  # debug leftover: floods the logs
 
         rewards = {}
         # check if any won during this turn
