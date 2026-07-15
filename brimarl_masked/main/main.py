@@ -1,5 +1,6 @@
 import random
 
+from brimarl_masked.agents.heuristic_agent import HeuristicAgent
 from brimarl_masked.agents.random_agent import RandomAgent
 from brimarl_masked.agents.scripted_ai_agent import ScriptedAIAgent
 from brimarl_masked.environment.emulate import play_episode
@@ -13,7 +14,9 @@ if __name__ == "__main__":
 
     logger = BriscolaLogger(BriscolaLogger.LoggerLevels.TRAIN)
     game = BriscolaGame(2, logger, win_extra_points=0)
-    agents = [RandomAgent(), ScriptedAIAgent()]
+    # agents = [RandomAgent(), ScriptedAIAgent()]
+    agents = [RandomAgent(), HeuristicAgent()]
+    # agents = [ScriptedAIAgent(), HeuristicAgent()]
 
     num_games = 1000
     wins = [0, 0]
