@@ -2,7 +2,7 @@ from multiprocessing import Pool as PPool
 from multiprocessing.dummy import Pool as TPool
 from multiprocessing import cpu_count
 from typing import List
-from brimarl_masked.agents.ac_agent import ACAgent
+from brimarl_masked.agents.ac_agent_quick import ACAgentQuick
 from brimarl_masked.environment.emulate import play_episode
 from brimarl_masked.environment.environment import BriscolaGame, Agent
 from itertools import repeat
@@ -54,16 +54,16 @@ class GamePool:
 
 if __name__ == "__main__":
     agents = [
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
-        [ACAgent(),ACAgent(),ACAgent(),ACAgent()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
+        [ACAgentQuick(),ACAgentQuick(),ACAgentQuick(),ACAgentQuick()],
     ]
     game = BriscolaGame(4, win_extra_points=0)
     pool = GamePool()

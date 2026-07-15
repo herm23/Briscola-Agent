@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from brimarl_masked.agents.ac_agent import ACAgent
+from brimarl_masked.agents.ac_agent_quick import ACAgentQuick
 from brimarl_masked.algorithms.algorithm import Algorithm
 
 
@@ -52,7 +52,7 @@ class A2CAlgorithm(Algorithm):
             self.d.append(dones[i])
             self.m.append(masks[i])
 
-    def learn(self, agent: ACAgent):
+    def learn(self, agent: ACAgentQuick):
         if len(self.s) < self.min_samples:
             return None
 
