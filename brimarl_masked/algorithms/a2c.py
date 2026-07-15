@@ -3,6 +3,7 @@ import numpy as np
 from brimarl_masked.agents.ac_agent_quick import ACAgentQuick
 from brimarl_masked.algorithms.algorithm import Algorithm
 
+#TODO: Fix this alghoritm only when you'll have good results on DQN
 
 class A2CAlgorithm(Algorithm):
     def __init__(self, num_players, discount, num_learning_per_epoch, min_samples=128, entropy_beta=0.0, epsilon=1e-8):
