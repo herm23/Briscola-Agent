@@ -6,16 +6,19 @@ from brimarl_masked.algorithms.replay_memory import ReplayMemory
 
 
 class QLearningAlgorithm(Algorithm):
-    def __init__(self, num_players, batch_size, discount, replace_every,num_learning_per_epoch, replay_memory_capacity):
+    def __init__(self, num_players, batch_size, discount, replace_every,num_learning_per_epoch, replay_memory_capacity, loss_fn=None):
         self.num_players = num_players
         self.batch_size = batch_size
         self.discount = discount
         self.training_iterations = 0
         self.replace_every = replace_every
         self.target_net = None
-        self.optimizer = tf.optimizers.legacy.Adam(1e-3)
+        # tf.optimizers.legacy was removed in Keras 3 (TF >= 2.16)
+        self.optimizer = tf.optimizers.Adam(1e-3)
         self.num_learning_per_epoch = num_learning_per_epoch
         self.replay_memory = ReplayMemory(replay_memory_capacity)
+        # Interchangeable loss (e.g. tf.keras.losses.Huber(delta=...)); default MSE.
+        self.loss_fn = loss_fn if loss_fn is not None else tf.keras.losses.MeanSquaredError()
 
     def store_game(self, states, actions, masks, rewards, dones):
         states = np.array(states)
@@ -91,8 +94,25 @@ class QLearningAlgorithm(Algorithm):
                 self.assert_same_shape(done, (BS, 1))
                 self.assert_same_shape(masks, masks)
 
+                with tf.GradientTape() as tape:
+                    # Q(s,a; θ): the net outputs 40 values, actions are one-hot
+                    q_values = agent.policy_net(states)
+                    q_sa = tf.reduce_sum(q_values * actions, axis=1, keepdims=True)
 
-                avg_loss += q_learning_loss
+                    # TD target: y = r + γ (1 - done) max_a' Q(s', a'; θ⁻)
+                    # computed with the frozen target net and restricted to the
+                    # actions available in s' (next_masks), as required for convergence
+                    next_q_values = self.target_net(next_states)
+                    masked_next_q = next_q_values + (1. - next_masks) * np.finfo(np.float32).min
+                    max_next_q = tf.reduce_max(masked_next_q, axis=1, keepdims=True)
+                    targets = tf.stop_gradient(rewards + self.discount * (1. - done) * max_next_q)
+
+                    q_learning_loss = self.loss_fn(targets, q_sa)
+
+                gradients = tape.gradient(q_learning_loss, agent.policy_net.trainable_variables)
+                self.optimizer.apply_gradients(zip(gradients, agent.policy_net.trainable_variables))
+
+                avg_loss += float(q_learning_loss)
 
             agent.update_epsilon()
         return avg_loss / self.num_learning_per_epoch

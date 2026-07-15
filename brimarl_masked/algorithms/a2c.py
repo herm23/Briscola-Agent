@@ -8,8 +8,9 @@ class A2CAlgorithm(Algorithm):
     def __init__(self, num_players, discount, num_learning_per_epoch, min_samples=128, entropy_beta=0.0, epsilon=1e-8):
         self.num_players = num_players
         self.discount = discount
-        self.optimizer_actor = tf.optimizers.legacy.Adam(1e-4)
-        self.optimizer_critic = tf.optimizers.legacy.Adam(3e-4)
+        # tf.optimizers.legacy was removed in Keras 3 (TF >= 2.16)
+        self.optimizer_actor = tf.optimizers.Adam(1e-4)
+        self.optimizer_critic = tf.optimizers.Adam(3e-4)
         self.num_learning_per_epoch = num_learning_per_epoch
         self.entropy_beta = entropy_beta
         self.epsilon = epsilon
