@@ -22,7 +22,7 @@ class TrainingScriptedExploring(TrainingScripted):
         self.agent_algorithm.store_game(states[0], actions[0], masks[0], rewards[0], dones[0])
 
 
-def main(episodes=3000, evaluate_every=250, num_evaluation=500):
+def main(episodes=6000, evaluate_every=250, num_evaluation=500):
     random.seed(0)
     np.random.seed(0)
     tf.random.set_seed(0)
