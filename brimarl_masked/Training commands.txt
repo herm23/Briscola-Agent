@@ -1,0 +1,5 @@
+Training commands:
+
+python -m brimarl_masked.main.train_a2c
+python -m brimarl_masked.main.train_best_response --reward own
+python -m brimarl_masked.main.train_a2c --reward own

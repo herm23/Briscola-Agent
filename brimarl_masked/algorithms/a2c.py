@@ -4,12 +4,13 @@ from brimarl_masked.agents.ac_agent_quick import ACAgentQuick
 from brimarl_masked.algorithms.algorithm import Algorithm
 
 class A2CAlgorithm(Algorithm):
-    def __init__(self, num_players, discount, num_learning_per_epoch, min_samples=128, entropy_beta=0.0, epsilon=1e-8):
+    def __init__(self, num_players, discount, num_learning_per_epoch, min_samples=128, entropy_beta=0.0, epsilon=1e-8,
+                 lr_actor=3e-4, lr_critic=1e-3):
         self.num_players = num_players
         self.discount = discount
         # tf.optimizers.legacy was removed in Keras 3 (TF >= 2.16)
-        self.optimizer_actor = tf.optimizers.Adam(1e-4)
-        self.optimizer_critic = tf.optimizers.Adam(3e-4)
+        self.optimizer_actor = tf.optimizers.Adam(lr_actor)
+        self.optimizer_critic = tf.optimizers.Adam(lr_critic)
         self.num_learning_per_epoch = num_learning_per_epoch
         self.entropy_beta = entropy_beta
         self.epsilon = epsilon
@@ -44,11 +45,23 @@ class A2CAlgorithm(Algorithm):
         rewards = rewards[:-self.num_players]
         masks = masks[:-self.num_players]
 
-        for i in range(0, len(states), self.num_players):
+        # Monte-Carlo reward-to-go over this (complete) game: G_t = r_t + γ G_{t+1}.
+        # Used as critic target and in the advantage instead of the TD(0) bootstrap:
+        # episodes are short (~20 decisions), the exact return is available and it
+        # does not depend on the quality of a critic still learning from scratch.
+        step_rewards = [rewards[i] for i in range(0, len(states), self.num_players)]
+        returns = []
+        g = 0.
+        for r in reversed(step_rewards):
+            g = r + self.discount * g
+            returns.append(g)
+        returns.reverse()
+
+        for j, i in enumerate(range(0, len(states), self.num_players)):
             self.s.append(states[i:i + self.num_players][tf.where(states[i:i + self.num_players][:, 0] == 1)[0]])
             self.sn.append(next_states[i:i + self.num_players][tf.where(next_states[i:i + self.num_players][:, 0] == 1)[0]])
             self.a.append(actions[i])
-            self.r.append(rewards[i])
+            self.r.append(returns[j])
             self.d.append(dones[i])
             self.m.append(masks[i])
 
@@ -81,18 +94,20 @@ class A2CAlgorithm(Algorithm):
         loss = 0.
         iterations = 0.
         for _ in range(self.num_learning_per_epoch):
-            # --- critic: V(s) towards the TD target r + γ (1 - d) V(s') ---
+            # --- critic: V(s) towards the Monte-Carlo return G_t (stored in r) ---
             with tf.GradientTape() as tape_critic:
                 v_s = agent.value_net(s)
-                v_sn = agent.value_net(sn)
-                targets = tf.stop_gradient(r + self.discount * (1. - d) * v_sn)
+                targets = r
                 loss_critic = tf.reduce_mean(tf.square(targets - v_s))
             grads_critic = tape_critic.gradient(loss_critic, agent.value_net.trainable_variables)
             self.optimizer_critic.apply_gradients(zip(grads_critic, agent.value_net.trainable_variables))
 
             # --- actor: policy gradient with advantage A = target - V(s) ---
-            # the advantage uses the critic as fixed judge: no gradient through it
+            # the advantage uses the critic as fixed judge: no gradient through it;
+            # normalized to zero mean / unit std so the gradient scale does not
+            # depend on the reward scale (few, small on-policy batches)
             advantages = tf.stop_gradient(targets - v_s)
+            advantages = (advantages - tf.reduce_mean(advantages)) / (tf.math.reduce_std(advantages) + self.epsilon)
             with tf.GradientTape() as tape_actor:
                 probs = agent.policy_net(s)
                 # renormalize over the legal actions, as done when acting

@@ -105,9 +105,14 @@ class ACAgentQuick(Agent):
         original_probs = self.policy_net(s)[0]
         masked_probs = original_probs * mask
         probs = masked_probs / tf.reduce_sum(masked_probs)
-        action = tf.random.categorical(
-            tf.math.log(probs[None, ...]), 1
-        )[0, 0]
+        if self.training:
+            action = tf.random.categorical(
+                tf.math.log(probs[None, ...]), 1
+            )[0, 0]
+        else:
+            # evaluation: play the mode of the policy (comparable with the
+            # greedy DQN evaluation), sampling is kept for data collection
+            action = tf.argmax(probs)
         game_action = np.argwhere([c.id == action for c in player.hand]).squeeze()
         action = np.zeros(40)
         action[player.hand[game_action].id] = 1

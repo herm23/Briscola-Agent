@@ -8,6 +8,7 @@ from brimarl_masked.environment.environment import BriscolaLogger, BriscolaGame
 from brimarl_masked.environment.reward_variants import BriscolaGameOwnPoints
 from brimarl_masked.agents.ac_agent_quick import ACAgentQuick
 from brimarl_masked.algorithms.a2c import A2CAlgorithm
+from brimarl_masked.main.train_best_response import TrainingScriptedExploring
 from brimarl_masked.scritps.training import *
 
 
@@ -22,19 +23,26 @@ def main(episodes=6000, evaluate_every=250, num_evaluation=500, reward="standard
     game = game_class(2, logger, win_extra_points=0)
 
     # no epsilon here: the actor samples from its own (masked) softmax, so
-    # exploration is intrinsic to the policy and annealed by learning itself
+    # exploration is intrinsic to the policy and annealed by learning itself.
+    # TrainingScriptedExploring collects with clone(training=True) so that the
+    # sampling stays on during data collection, while evaluations (and the
+    # final agent) play greedily the mode of the policy.
     agent = ACAgentQuick(training=True)
 
-    training = TrainingScripted(
+    training = TrainingScriptedExploring(
         num_epochs=episodes,
         num_game_per_epoch=1,
         game=game, agent=agent,
         agent_algorithm=A2CAlgorithm(
             num_players=2,
             discount=1.0,               # short episodic games, no need to discount
-            num_learning_per_epoch=1,   # on-policy: one pass over the fresh batch
+            num_learning_per_epoch=4,   # multiple passes on the fresh batch: the
+                                        # on-policy buffer fills every ~6-7 games,
+                                        # a single step per batch moves too little
             min_samples=128,            # learn every ~6-7 games of transitions
             entropy_beta=0.01,          # mild exploration bonus on the policy
+            lr_actor=3e-4,
+            lr_critic=1e-3,
         ),
         evaluate_every=evaluate_every,
         num_evaluations=num_evaluation,
