@@ -34,25 +34,25 @@
 \printAffiliationsAndNotice{}
 
 \begin{abstract}
-We train an agent for two-player Briscola with the goal of maximizing the win rate against the provided rule-based \texttt{ScriptedAIAgent}.
-We first design a non-learning heuristic baseline built on card counting and expected-value reasoning, which wins $59.9\%$ of the games against the scripted opponent.
-We then train a Deep Q-Network with action masking on the legal moves, filling the gaps in the provided codebase.
-The learned agent reliably beats the scripted opponent ($52.3\%$ win rate over $1000$ evaluation games) but does not surpass our baseline.
-We analyze why, and discuss the improvements we consider most promising.
+I train an agent for two-player Briscola with the goal of maximizing the win rate against the provided rule-based \texttt{ScriptedAIAgent}.
+I first design a non-learning heuristic baseline built on card counting and expected-value reasoning, which wins $59.9\%$ of the games against the scripted opponent.
+I then train a Deep Q-Network with action masking on the legal moves, filling the gaps in the provided codebase.
+The learned agent reliably beats the scripted opponent ($52.3\%$ win rate over $1000$ evaluation games) but does not surpass my baseline.
+I analyze why, and discuss the improvements I consider most promising.
 \end{abstract}
 
 \section{Task and critical issues}
 \label{sec:task}
 
-Briscola is a two-player trick-taking card game played with a 40-card deck: at each turn both players play one card, the trick winner collects the card points ($120$ in total) and a game is won by exceeding $60$ points. The environment is provided; the agent observes a $244$-dimensional binary-ish state (turn features, its hand, the cards on the table and all cards seen so far, each with a briscola-suit flag) and outputs one of $40$ actions (card identities), of which only the cards actually in hand are legal. We identified the following critical issues.
+Briscola is a two-player trick-taking card game played with a 40-card deck: at each turn both players play one card, the trick winner collects the card points ($120$ in total) and a game is won by exceeding $60$ points. The environment is provided; the agent observes a $244$-dimensional binary-ish state (turn features, its hand, the cards on the table and all cards seen so far, each with a briscola-suit flag) and outputs one of $40$ actions (card identities), of which only the cards actually in hand are legal. I identified the following critical issues.
 
 \textbf{Imperfect information and stochasticity.} The opponent's hand and the deck order are hidden, so identical observed states can lead to different outcomes: the return of any fixed policy has high variance. This luck component has a measurable size: a uniformly random player still wins $21.2\%$ of games against the scripted agent (seed 0, $1000$ games). Win-rate estimates must therefore be read with a binomial error bar of about $\pm 1.5\%$ at $1000$ games, and learning curves are intrinsically noisy.
 
-\textbf{Reward design.} The environment rewards the points of each trick ($\pm$ for winner/loser) rather than the game outcome. This is a dense and informative signal, but it is a proxy: maximizing expected points is not exactly maximizing win probability (e.g.\ winning $61$--$120$ points counts the same). We kept the provided reward (with \texttt{win\_extra\_points}$=0$) precisely because it is dense; the mismatch is discussed in Section~\ref{sec:discussion}.
+\textbf{Reward design.} The environment rewards the points of each trick ($\pm$ for winner/loser) rather than the game outcome. This is a dense and informative signal, but it is a proxy: maximizing expected points is not exactly maximizing win probability (e.g.\ winning $61$--$120$ points counts the same). I kept the provided reward (with \texttt{win\_extra\_points}$=0$) precisely because it is dense; the mismatch is discussed in Section~\ref{sec:discussion}.
 
 \textbf{Legal-action masking.} The network scores all $40$ cards, but only the $1$--$3$ cards in hand are playable. Without restricting both the acted policy and the bootstrap target to legal moves, Q-learning propagates values of impossible actions and does not converge. Masking is applied in action selection and inside the TD target (Section~\ref{sec:algorithm}); conceptually this is the same mechanism as \emph{shielding} in safe RL.
 
-\textbf{Provided-code pitfalls.} The codebase is part of a larger project, and some provided components interact in subtle ways. The most consequential one: the training loop collects games with a \emph{greedy} clone of the agent (\texttt{clone()} defaults to \texttt{training=False}), silently disabling $\varepsilon$-greedy exploration. We fixed this with a subclass that clones the agent in training mode; without the fix the replay buffer only ever contains greedy self-confirming trajectories.
+\textbf{Provided-code pitfalls.} The codebase is part of a larger project, and some provided components interact in subtle ways. The most consequential one: the training loop collects games with a \emph{greedy} clone of the agent (\texttt{clone()} defaults to \texttt{training=False}), silently disabling $\varepsilon$-greedy exploration. I fixed this with a subclass that clones the agent in training mode; without the fix the replay buffer only ever contains greedy self-confirming trajectories.
 
 \section{Heuristic baseline}
 \label{sec:baseline}
@@ -74,13 +74,13 @@ The baseline is deterministic given the game state and runs in negligible time. 
 \section{RL algorithm}
 \label{sec:algorithm}
 
-We chose \textbf{DQN} \cite{mnih2015dqn} among the two options supported by the codebase (DQN or A2C), for three reasons. First, the action space is small and discrete ($40$ actions, $\leq 3$ legal), the natural regime of value-based methods, and the legal-action mask integrates exactly in both action selection and the bootstrap target --- whereas masking a softmax policy requires more care. Second, the opponent is \emph{fixed}, so the environment is stationary and the convergence setting of Q-learning applies; there is no need for the on-policy machinery of A2C. Third, experience replay reuses each simulated game many times, which matters on a CPU-only budget where game simulation is the bottleneck.
+I chose \textbf{DQN} \cite{mnih2015dqn} among the two options supported by the codebase (DQN or A2C), for three reasons. First, the action space is small and discrete ($40$ actions, $\leq 3$ legal), the natural regime of value-based methods, and the legal-action mask integrates exactly in both action selection and the bootstrap target --- whereas masking a softmax policy requires more care. Second, the opponent is \emph{fixed}, so the environment is stationary and the convergence setting of Q-learning applies; there is no need for the on-policy machinery of A2C. Third, experience replay reuses each simulated game many times, which matters on a CPU-only budget where game simulation is the bottleneck.
 
 The Q-network is a plain MLP $244 \to 256 \to 256 \to 40$ (ReLU, linear output head). Given transitions $(s, a, r, s', d)$ with legal-action masks $m'$ for $s'$, the loss on a minibatch is
 \begin{equation}
     \mathcal{L}(\theta) = \Big( r + \gamma \, (1-d) \max_{a' :\, m'(a')=1} Q_{\theta^-}(s', a') - Q_\theta(s, a) \Big)^{\!2}
 \end{equation}
-where $\theta^-$ is a frozen target network. The masked $\max$ is implemented by adding $-\infty$ (float min) to the Q-values of illegal actions before the maximum: the target only ever bootstraps from moves that are actually available, which we found indispensable for convergence.
+where $\theta^-$ is a frozen target network. The masked $\max$ is implemented by adding $-\infty$ (float min) to the Q-values of illegal actions before the maximum: the target only ever bootstraps from moves that are actually available, which I found indispensable for convergence.
 
 \textbf{Training setup} (seed 0 for \texttt{random}, NumPy and TensorFlow): $6000$ epochs of $1$ game each against \texttt{ScriptedAIAgent}; replay buffer of $10^4$ transitions; $2$ gradient updates per epoch with batch size $128$; Adam with learning rate $10^{-3}$; MSE loss; target network refreshed every $250$ training iterations; $\gamma = 1$ (episodes are short and finite, so no discount is needed); $\varepsilon$-greedy exploration decaying linearly from $1.0$ to $0.1$ at $80\%$ of training and constant afterwards. Every $250$ epochs the greedy policy is evaluated over $500$ games against the scripted and random opponents, and the weights are checkpointed.
 
@@ -99,7 +99,7 @@ Figure~\ref{fig:learning-curve} shows the learning curve. The agent surpasses th
 \vskip -0.2in
 \end{figure}
 
-For the final evaluation we selected the best checkpoint and re-evaluated it greedily over $1000$ fresh games per opponent (seed 0, \texttt{python evaluate.py}); Table~\ref{tab:results} summarizes all agents under the same protocol. The learned agent wins $\mathbf{52.3\%}$ of games against the scripted opponent (average $61.6$ points per game vs.\ $58.3$) and $79.1\%$ against the random player. The gap between the $500$-game running evaluation ($55.6\%$) and the $1000$-game final one ($52.3\%$) is consistent with the $\pm 2\%$ binomial noise of the two estimates.
+For the final evaluation I selected the best checkpoint and re-evaluated it greedily over $1000$ fresh games per opponent (seed 0, \texttt{python evaluate.py}); Table~\ref{tab:results} summarizes all agents under the same protocol. The learned agent wins $\mathbf{52.3\%}$ of games against the scripted opponent (average $61.6$ points per game vs.\ $58.3$) and $79.1\%$ against the random player. The gap between the $500$-game running evaluation ($55.6\%$) and the $1000$-game final one ($52.3\%$) is consistent with the $\pm 2\%$ binomial noise of the two estimates.
 
 \begin{table}[t]
 \caption{Win rates over $1000$ games, seed 0. Rows: evaluated agent; columns: opponent.}
@@ -114,8 +114,8 @@ Agent & vs Scripted & vs Random \\
 \midrule
 RandomAgent     & 21.2\% & --     \\
 ScriptedAIAgent & --     & 78.8\% \\
-DQN (ours)      & 52.3\% & 79.1\% \\
-HeuristicAgent (ours) & \textbf{59.9\%} & \textbf{83.9\%} \\
+DQN (this work)      & 52.3\% & 79.1\% \\
+HeuristicAgent (this work) & \textbf{59.9\%} & \textbf{83.9\%} \\
 \bottomrule
 \end{tabular}
 \end{sc}
@@ -127,11 +127,11 @@ HeuristicAgent (ours) & \textbf{59.9\%} & \textbf{83.9\%} \\
 \section{Discussion}
 \label{sec:discussion}
 
-\textbf{The task goal is met, the internal bar is not.} The DQN beats the opponent it was asked to beat: $52.3\%$ against \texttt{ScriptedAIAgent}, with a positive point differential, and it plays at the scripted agent's own level against the random player ($79.1\%$ vs.\ $78.8\%$). It does not, however, surpass our heuristic baseline. We believe the main reason is that the baseline was built deliberately strong: it receives, for free and in exact symbolic form, precisely the two quantities that are hardest to extract from the flat $244$-dimensional observation --- the set of still-unseen cards and a worst-case comparison of every hand card against that set. The network sees the same information in principle (the state includes all cards seen so far), but must rediscover counting and worst-case reasoning implicitly in its weights from a noisy, high-variance reward signal.
+\textbf{The task goal is met, the internal bar is not.} The DQN beats the opponent it was asked to beat: $52.3\%$ against \texttt{ScriptedAIAgent}, with a positive point differential, and it plays at the scripted agent's own level against the random player ($79.1\%$ vs.\ $78.8\%$). It does not, however, surpass my heuristic baseline. I believe the main reason is that the baseline was built deliberately strong: it receives, for free and in exact symbolic form, precisely the two quantities that are hardest to extract from the flat $244$-dimensional observation --- the set of still-unseen cards and a worst-case comparison of every hand card against that set. The network sees the same information in principle (the state includes all cards seen so far), but must rediscover counting and worst-case reasoning implicitly in its weights from a noisy, high-variance reward signal.
 
 \textbf{Why the plateau.} Three compounding causes are plausible. (i) \emph{Return variance}: with a $\sim 21\%$ luck floor, the Bellman targets of near-tied states are dominated by noise that more games per update would average out. (ii) \emph{Proxy reward}: the agent maximizes expected points, and the plateau band is exactly where converting extra points into extra \emph{wins} requires endgame-specific play (e.g.\ point $61$ is worth everything, point $100$ nothing extra). (iii) \emph{Max-operator overestimation}, amplified by $\gamma=1$ and MSE on rewards in the $\pm 21$ range.
 
-\textbf{Improvements we would try next}, in order of expected return: (1) more gradient updates per epoch ($2 \to 4$) with a lower learning rate ($5\cdot10^{-4}$) and a faster target refresh, since the curve was still drifting upward when $\varepsilon$ bottomed out; (2) Double DQN \cite{vanhasselt2016double} and a Huber loss to address (iii); (3) a terminal win bonus (\texttt{win\_extra\_points}) to realign the proxy reward with the true objective; (4) hand-crafted state augmentation (e.g.\ explicit unseen-card features), which would transfer the baseline's key insight to the learned agent; (5) self-play after the best response converges, which the codebase already scaffolds.
+\textbf{Improvements I would try next}, in order of expected return: (1) more gradient updates per epoch ($2 \to 4$) with a lower learning rate ($5\cdot10^{-4}$) and a faster target refresh, since the curve was still drifting upward when $\varepsilon$ bottomed out; (2) Double DQN \cite{vanhasselt2016double} and a Huber loss to address (iii); (3) a terminal win bonus (\texttt{win\_extra\_points}) to realign the proxy reward with the true objective; (4) hand-crafted state augmentation (e.g.\ explicit unseen-card features), which would transfer the baseline's key insight to the learned agent; (5) self-play after the best response converges, which the codebase already scaffolds.
 
 \nocite{sutton2018reinforcement}
 
