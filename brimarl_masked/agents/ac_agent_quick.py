@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import List
 
@@ -118,14 +119,16 @@ class ACAgentQuick(Agent):
     def save_model(self, path: str):
         if not path.endswith("/"):
             path += "/"
-        self.policy_net.save_weights(path + self.name + "/policy")
-        self.value_net.save_weights(path + self.name + "/value")
+        # Keras 3 requires the .weights.h5 extension and an existing directory
+        os.makedirs(path + self.name, exist_ok=True)
+        self.policy_net.save_weights(path + self.name + "/policy.weights.h5")
+        self.value_net.save_weights(path + self.name + "/value.weights.h5")
 
     def load_model(self, path: str):
         if not path.endswith("/"):
             path += "/"
-        self.policy_net.load_weights(path + self.name + "/policy")
-        self.value_net.load_weights(path + self.name + "/value")
+        self.policy_net.load_weights(path + self.name + "/policy.weights.h5")
+        self.value_net.load_weights(path + self.name + "/value.weights.h5")
 
     def clone(self, training=False, deep=False):
         assert type(self) is ACAgentQuick

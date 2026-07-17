@@ -1,9 +1,11 @@
+import argparse
 import random
 
 import numpy as np
 import tensorflow as tf
 
 from brimarl_masked.environment.environment import BriscolaLogger, BriscolaGame
+from brimarl_masked.environment.reward_variants import BriscolaGameOwnPoints
 from brimarl_masked.agents.q_agent import DeepQAgent
 from brimarl_masked.algorithms.dqn import QLearningAlgorithm
 from brimarl_masked.scritps.training import *
@@ -22,14 +24,15 @@ class TrainingScriptedExploring(TrainingScripted):
         self.agent_algorithm.store_game(states[0], actions[0], masks[0], rewards[0], dones[0])
 
 
-def main(episodes=6000, evaluate_every=250, num_evaluation=500):
+def main(episodes=6000, evaluate_every=250, num_evaluation=500, reward="standard"):
     random.seed(0)
     np.random.seed(0)
     tf.random.set_seed(0)
 
     np.set_printoptions(linewidth=500, threshold=np.inf)
     logger = BriscolaLogger(BriscolaLogger.LoggerLevels.TRAIN)
-    game = BriscolaGame(2, logger, win_extra_points=0)
+    game_class = BriscolaGame if reward == "standard" else BriscolaGameOwnPoints
+    game = game_class(2, logger, win_extra_points=0)
 
     agent = DeepQAgent(
         epsilon=1.0,                            # start fully exploratory
@@ -53,10 +56,14 @@ def main(episodes=6000, evaluate_every=250, num_evaluation=500):
         evaluate_every=evaluate_every,
         num_evaluations=num_evaluation,
         from_savings=False,
-        save_dir="models_savings/2/DeepQAgent",
+        save_dir="models_savings/2/DeepQAgent" + ("" if reward == "standard" else "_own"),
     )
     training.train()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reward", choices=["standard", "own"], default="standard",
+                        help="standard: trick points, +/- winner/loser; own: winner +points, loser 0")
+    args = parser.parse_args()
+    main(reward=args.reward)
