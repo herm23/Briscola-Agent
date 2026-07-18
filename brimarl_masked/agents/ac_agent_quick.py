@@ -104,6 +104,13 @@ class ACAgentQuick(Agent):
         s = self.state(game, player, player)[None, ...]
         original_probs = self.policy_net(s)[0]
         masked_probs = original_probs * mask
+        norm = float(tf.reduce_sum(masked_probs))
+        if not np.isfinite(norm) or norm <= 0.:
+            # saturated softmax: all the legal probabilities underflowed to 0
+            # (the mass sits on illegal actions) -> 0/0 = NaN and the sampled
+            # index would not match any card in hand. Fall back to a uniform
+            # distribution over the legal actions.
+            masked_probs = tf.convert_to_tensor(mask / mask.sum(), dtype=original_probs.dtype)
         probs = masked_probs / tf.reduce_sum(masked_probs)
         if self.training:
             action = tf.random.categorical(

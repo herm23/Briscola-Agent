@@ -38,6 +38,7 @@ I train an agent for two-player Briscola with the goal of maximizing the win rat
 I first design a non-learning heuristic baseline built on card counting and expected-value reasoning, which wins $59.9\%$ of the games against the scripted opponent.
 I then train a Deep Q-Network with action masking on the legal moves, filling the gaps in the provided codebase.
 The learned agent reliably beats the scripted opponent ($52.3\%$ win rate over $1000$ evaluation games) but does not surpass my baseline.
+As a bonus, I train the full $2 \times 2$ matrix \{DQN, A2C\} $\times$ \{standard, ``own points''\} reward: the algorithm choice dominates, with both A2C runs remaining near the luck floor while DQN is robust to the reward variant.
 I analyze why, and discuss the improvements I consider most promising.
 \end{abstract}
 
@@ -74,7 +75,7 @@ The baseline is deterministic given the game state and runs in negligible time. 
 \section{RL algorithm}
 \label{sec:algorithm}
 
-I chose \textbf{DQN} \cite{mnih2015dqn} among the two options supported by the codebase (DQN or A2C), for three reasons. First, the action space is small and discrete ($40$ actions, $\leq 3$ legal), the natural regime of value-based methods, and the legal-action mask integrates exactly in both action selection and the bootstrap target --- whereas masking a softmax policy requires more care. Second, the opponent is \emph{fixed}, so the environment is stationary and the convergence setting of Q-learning applies; there is no need for the on-policy machinery of A2C. Third, experience replay reuses each simulated game many times, which matters on a CPU-only budget where game simulation is the bottleneck.
+I chose \textbf{DQN} \cite{mnih2015dqn} among the two options supported by the codebase (DQN or A2C), for three reasons. First, the action space is small and discrete ($40$ actions, $\leq 3$ legal), the natural regime of value-based methods, and the legal-action mask integrates exactly in both action selection and the bootstrap target --- whereas masking a softmax policy requires more care. Second, the opponent is \emph{fixed}, so the environment is stationary and the convergence setting of Q-learning applies; there is no need for the on-policy machinery of A2C. Third, experience replay reuses each simulated game many times, which matters on a CPU-only budget where game simulation is the bottleneck. Section~\ref{sec:bonus} tests this choice empirically.
 
 The Q-network is a plain MLP $244 \to 256 \to 256 \to 40$ (ReLU, linear output head). Given transitions $(s, a, r, s', d)$ with legal-action masks $m'$ for $s'$, the loss on a minibatch is
 \begin{equation}
@@ -124,14 +125,60 @@ HeuristicAgent (this work) & \textbf{59.9\%} & \textbf{83.9\%} \\
 \vskip -0.1in
 \end{table}
 
+\section{Bonus experiments: A2C and reward design}
+\label{sec:bonus}
+
+To separate the contribution of the algorithm from that of the reward, I trained the full $2 \times 2$ matrix \{DQN, A2C\} $\times$ \{standard, own-points reward\} under the same protocol of Section~\ref{sec:algorithm} (seed 0, $6000$ epochs, running evaluation every $250$ epochs).
+
+\textbf{A2C.} Actor and critic share the DQN body ($284 \to 256 \to 256$; softmax over the $40$ actions, resp.\ scalar value). The policy is masked and renormalized over the legal cards, both when acting and inside the loss $-\mathbb{E}[A \log \pi(a|s)]$, with an entropy bonus ($\beta = 0.01$); the advantage $A = G - V(s)$ uses Monte-Carlo returns $G$ (episodes are short, and the exact return does not depend on a critic still learning), is treated as a constant and normalized per batch; evaluation plays the mode of the policy. Being on-policy, A2C has no replay buffer: each batch of transitions is consumed right after being collected ($4$ passes), so at equal simulation budget it performs roughly $40\times$ fewer gradient steps than DQN.
+
+\textbf{Own-points reward.} The variant rewards the trick winner with the trick points and gives the loser $0$: with $\gamma = 1$ the return is exactly the agent's final score ($0$--$120$) instead of the point differential ($\pm 120$), removing the explicit incentive to deny points to the opponent.
+
+\begin{figure}[ht]
+\vskip 0.2in
+\begin{center}
+\centerline{\includegraphics[width=\columnwidth]{learning_curve_bonus}}
+\caption{Win rate against \texttt{ScriptedAIAgent} during training for the four configurations (running evaluation, $500$ games every $250$ epochs). Dashed: heuristic baseline; dotted: random-play luck floor.}
+\label{fig:bonus-curve}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+% Numbers = running evaluations (500 games) stored in win_rates.txt.
+% Optionally add a 1000-game column from: python evaluate.py --agent {dqn,a2c} --reward {standard,own}
+\begin{table}[t]
+\caption{Bonus matrix: win rate vs \texttt{ScriptedAIAgent} on the $500$-game running evaluation (best checkpoint, with its epoch, and final).}
+\label{tab:bonus}
+\vskip 0.15in
+\begin{center}
+\begin{small}
+\begin{sc}
+\begin{tabular}{lcc}
+\toprule
+Configuration & Best (epoch) & Final \\
+\midrule
+DQN, standard   & \textbf{0.556} (5250) & 0.508 \\
+DQN, own points & 0.490 (6000) & 0.490 \\
+A2C, standard   & 0.252 (4250) & 0.230 \\
+A2C, own points & 0.310 (5750) & 0.254 \\
+\bottomrule
+\end{tabular}
+\end{sc}
+\end{small}
+\end{center}
+\vskip -0.1in
+\end{table}
+
+Figure~\ref{fig:bonus-curve} and Table~\ref{tab:bonus} give three clear answers. \emph{(i) The algorithm dominates the reward}: both DQN runs climb into the $0.45$--$0.55$ band, both A2C runs remain within $\sim\!0.1$ of the $21\%$ luck floor. \emph{(ii) A2C fails for the reasons anticipated in Section~\ref{sec:algorithm}}: far fewer gradient steps per simulated game, and a policy-gradient signal whose variance is inflated by the luck component. The failure mode is policy collapse: in the own-points run the softmax saturated around epoch $1000$ (probability $\approx 1$ on a single action, legal-card probabilities underflowing to $0$), to the point of requiring a numerical guard in action selection. \emph{(iii) Reward design is second-order}: the own-points variant slightly hurts DQN ($0.490$ vs.\ $0.556$ at best), consistent with losing the defensive information carried by the negative rewards, and slightly helps the (much weaker) A2C, but neither effect approaches the algorithm gap.
+
 \section{Discussion}
 \label{sec:discussion}
 
 \textbf{The task goal is met, the internal bar is not.} The DQN beats the opponent it was asked to beat: $52.3\%$ against \texttt{ScriptedAIAgent}, with a positive point differential, and it plays at the scripted agent's own level against the random player ($79.1\%$ vs.\ $78.8\%$). It does not, however, surpass my heuristic baseline. I believe the main reason is that the baseline was built deliberately strong: it receives, for free and in exact symbolic form, precisely the two quantities that are hardest to extract from the flat $244$-dimensional observation --- the set of still-unseen cards and a worst-case comparison of every hand card against that set. The network sees the same information in principle (the state includes all cards seen so far), but must rediscover counting and worst-case reasoning implicitly in its weights from a noisy, high-variance reward signal.
 
-\textbf{Why the plateau.} Three compounding causes are plausible. (i) \emph{Return variance}: with a $\sim 21\%$ luck floor, the Bellman targets of near-tied states are dominated by noise that more games per update would average out. (ii) \emph{Proxy reward}: the agent maximizes expected points, and the plateau band is exactly where converting extra points into extra \emph{wins} requires endgame-specific play (e.g.\ point $61$ is worth everything, point $100$ nothing extra). (iii) \emph{Max-operator overestimation}, amplified by $\gamma=1$ and MSE on rewards in the $\pm 21$ range.
+\textbf{Why the plateau.} Three compounding causes are plausible. (i) \emph{Return variance}: with a $\sim 21\%$ luck floor, the Bellman targets of near-tied states are dominated by noise that more games per update would average out. (ii) \emph{Proxy reward}: the agent maximizes expected points, and the plateau band is exactly where converting extra points into extra \emph{wins} requires endgame-specific play (e.g.\ point $61$ is worth everything, point $100$ nothing extra) --- although the own-points experiment of Section~\ref{sec:bonus} shows that re-designing the dense reward alone does not move the plateau. (iii) \emph{Max-operator overestimation}, amplified by $\gamma=1$ and MSE on rewards in the $\pm 21$ range.
 
-\textbf{Improvements I would try next}, in order of expected return: (1) more gradient updates per epoch ($2 \to 4$) with a lower learning rate ($5\cdot10^{-4}$) and a faster target refresh, since the curve was still drifting upward when $\varepsilon$ bottomed out; (2) Double DQN \cite{vanhasselt2016double} and a Huber loss to address (iii); (3) a terminal win bonus (\texttt{win\_extra\_points}) to realign the proxy reward with the true objective; (4) hand-crafted state augmentation (e.g.\ explicit unseen-card features), which would transfer the baseline's key insight to the learned agent; (5) self-play after the best response converges, which the codebase already scaffolds.
+\textbf{Improvements I would try next.} The bonus experiments already rule out two directions: switching to on-policy A2C, and re-designing the dense reward, neither of which addresses the causes above. What remains, in order of expected return: (1) more gradient updates per epoch ($2 \to 4$) with a lower learning rate ($5\cdot10^{-4}$) and a faster target refresh, since the curve was still drifting upward when $\varepsilon$ bottomed out; (2) Double DQN \cite{vanhasselt2016double} and a Huber loss to address (iii); (3) a \emph{terminal} win bonus (\texttt{win\_extra\_points}), the one reward change still untested, which targets the win/points mismatch directly rather than reshaping the dense signal; (4) hand-crafted state augmentation (e.g.\ explicit unseen-card features), which would transfer the baseline's key insight to the learned agent; (5) self-play after the best response converges, which the codebase already scaffolds.
 
 \nocite{sutton2018reinforcement}
 
