@@ -7,3 +7,4 @@ __pycache__/
 
 # Training output (i pesi finali per la consegna si copiano a parte)
 models_savings/
+proj_submit/
