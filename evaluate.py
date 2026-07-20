@@ -62,15 +62,11 @@ def main(num_games: int, weights_dir: str, agent_type: str = "dqn"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--num_games", type=int, default=1000,
-                        help="number of evaluation games against each opponent")
-    parser.add_argument("--agent", choices=["dqn", "a2c"], default="dqn",
-                        help="agent to evaluate (default: the submitted DQN)")
-    parser.add_argument("--reward", choices=["standard", "own"], default="standard",
-                        help="reward variant the agent was trained with "
+    parser.add_argument("--num_games", type=int, default=1000, help="number of evaluation games against each opponent")
+    parser.add_argument("--agent", choices=["dqn", "a2c"], default="dqn", help="agent to evaluate (default: the submitted DQN)")
+    parser.add_argument("--reward", choices=["standard", "own"], default="standard", help="reward variant the agent was trained with "
                              "(selects the default weights directory)")
-    parser.add_argument("--weights", type=str, default=None,
-                        help="directory containing the saved agent weights "
+    parser.add_argument("--weights", type=str, default=None, help="directory containing the saved agent weights "
                              "(overrides the --agent/--reward default)")
     args = parser.parse_args()
     weights = args.weights or WEIGHTS_DIRS[(args.agent, args.reward)]
